@@ -1,6 +1,5 @@
 package zx.soft.sent.solr.utils;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -12,7 +11,7 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
-import redis.clients.jedis.Transaction;
+import zx.soft.sent.dao.common.SentimentConstant;
 import zx.soft.sent.dao.domain.platform.RecordInfo;
 import zx.soft.utils.config.ConfigUtil;
 import zx.soft.utils.json.JsonUtils;
@@ -24,29 +23,10 @@ public class RedisMQ {
 
 	private static JedisPool pool;
 
-	private static final String CACHE_SENTIMENT_KEY = "cache-records";
-
 	private static final ObjectMapper OBJECT_MAPPER = JsonUtils.getObjectMapper();
 
 	public RedisMQ() {
 		init();
-		// 每小时定时清空Redis连接池
-		//		Thread thread = new Thread(new Runnable() {
-		//			@Override
-		//			public void run() {
-		//				logger.info("Starting managing redis pool ...");
-		//				Timer timer = new Timer();
-		//				timer.schedule(new TimerTask() {
-		//					@Override
-		//					public void run() {
-		//						logger.info("Updating redis pool ...");
-		//						close();
-		//						init();
-		//					}
-		//				}, 0, 60 * 60_000);
-		//			}
-		//		});
-		//		thread.start();
 	}
 
 	private void init() {
@@ -84,11 +64,12 @@ public class RedisMQ {
 			return;
 		}
 		try {
-			jedis.watch(CACHE_SENTIMENT_KEY);
-			Transaction tx = jedis.multi();
-			tx.sadd(CACHE_SENTIMENT_KEY, members);
-			tx.exec();
-			jedis.unwatch();
+			//			jedis.watch(SentimentConstant.SENTIMENT_CACHE_KEY);
+			//			Transaction tx = jedis.multi();
+			//			tx.sadd(SentimentConstant.SENTIMENT_CACHE_KEY, members);
+			jedis.sadd(SentimentConstant.SENTIMENT_CACHE_KEY, members);
+			//			tx.exec();
+			//			jedis.unwatch();
 			// pipeline适用于批处理，管道比事务效率高
 			// 不使用dsicard会出现打开文件数太多，使用的话DISCARD without MULTI。
 			//			Pipeline p = jedis.pipelined();
@@ -101,7 +82,7 @@ public class RedisMQ {
 				jedis = null;
 			}
 		} finally {
-			// 这里很重要，一旦拿到的jedis实例使用完毕，必须要返还给池中 
+			// 这里很重要，一旦拿到的jedis实例使用完毕，必须要返还给池中
 			if (jedis != null && jedis.isConnected())
 				pool.returnResource(jedis);
 		}
@@ -118,7 +99,7 @@ public class RedisMQ {
 		}
 		try {
 			// 在事务和管道中不支持同步查询
-			result = jedis.scard(CACHE_SENTIMENT_KEY).longValue();
+			result = jedis.scard(SentimentConstant.SENTIMENT_CACHE_KEY).longValue();
 		} catch (Exception e) {
 			logger.error("Exception:{}", LogbackUtil.expection2Str(e));
 			if (jedis != null) {
@@ -142,10 +123,14 @@ public class RedisMQ {
 			return records;
 		}
 		try {
-			String value = jedis.spop(CACHE_SENTIMENT_KEY);
-			while (value != null) {
-				records.add(value);
-				value = jedis.spop(CACHE_SENTIMENT_KEY);
+			String value;
+			for (int i = 0; i < 10000; i++) {
+				value = jedis.spop(SentimentConstant.SENTIMENT_CACHE_KEY);
+				if (value != null) {
+					records.add(value);
+				} else {
+					break;
+				}
 			}
 			logger.info("Records'size = {}", records.size());
 		} catch (Exception e) {
@@ -169,7 +154,7 @@ public class RedisMQ {
 		for (String record : records) {
 			try {
 				recordInfos.add(OBJECT_MAPPER.readValue(record, RecordInfo.class));
-			} catch (IOException e) {
+			} catch (Exception e) {
 				logger.error("Record:{}", record);
 				logger.error("Exception:{}", LogbackUtil.expection2Str(e));
 			}
@@ -177,8 +162,68 @@ public class RedisMQ {
 		return recordInfos;
 	}
 
+	public synchronized void sadd(String key, String... members) {
+		Jedis jedis = getJedis();
+		// 下面可能导致丢失少量数据，后期需要修改
+		if (jedis == null) {
+			return;
+		}
+		try {
+			//			jedis.getClient().setTimeoutInfinite();
+			jedis.sadd(key, members);
+		} catch (Exception e) {
+			logger.error("Exception:{}", LogbackUtil.expection2Str(e));
+			if (jedis != null) {
+				pool.returnBrokenResource(jedis);
+				jedis = null;
+			}
+		} finally {
+			// 这里很重要，一旦拿到的jedis实例使用完毕，必须要返还给池中
+			if (jedis != null && jedis.isConnected())
+				pool.returnResource(jedis);
+		}
+	}
+
+	public synchronized boolean sismember(String key, String member) {
+		Jedis jedis = getJedis();
+		if (jedis == null) {
+			return Boolean.FALSE;
+		}
+		try {
+			return jedis.sismember(key, member);
+		} catch (Exception e) {
+			logger.error("Exception:{}", LogbackUtil.expection2Str(e));
+			if (jedis != null) {
+				pool.returnBrokenResource(jedis);
+				jedis = null;
+			}
+			return Boolean.FALSE;
+		} finally {
+			if (jedis != null && jedis.isConnected())
+				pool.returnResource(jedis);
+		}
+	}
+
+	public void deleteKey(String key) {
+		Jedis jedis = getJedis();
+		if (jedis != null) {
+			try {
+				jedis.del(key);
+			} catch (Exception e) {
+				logger.error("Exception:{}", LogbackUtil.expection2Str(e));
+				if (jedis != null) {
+					pool.returnBrokenResource(jedis);
+					jedis = null;
+				}
+			} finally {
+				if (jedis != null && jedis.isConnected())
+					pool.returnResource(jedis);
+			}
+		}
+	}
+
 	public void close() {
-		// 程序关闭时，需要调用关闭方法 
+		// 程序关闭时，需要调用关闭方法
 		pool.destroy();
 	}
 

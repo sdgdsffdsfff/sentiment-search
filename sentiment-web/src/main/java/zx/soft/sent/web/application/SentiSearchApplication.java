@@ -4,11 +4,9 @@ import org.restlet.Application;
 import org.restlet.Restlet;
 import org.restlet.routing.Router;
 
-import zx.soft.sent.dao.common.MybatisConfig;
-import zx.soft.sent.dao.sentiment.SentimentRecord;
 import zx.soft.sent.solr.domain.QueryParams;
 import zx.soft.sent.solr.domain.QueryResult;
-import zx.soft.sent.solr.search.SearchingData;
+import zx.soft.sent.solr.query.QueryCore;
 import zx.soft.sent.web.resource.SentSearchResource;
 
 /**
@@ -19,12 +17,10 @@ import zx.soft.sent.web.resource.SentSearchResource;
  */
 public class SentiSearchApplication extends Application {
 
-	private final SearchingData searchingData;
-	private final SentimentRecord sentimentRecord;
+	private final QueryCore queryCore;
 
 	public SentiSearchApplication() {
-		searchingData = new SearchingData();
-		sentimentRecord = new SentimentRecord(MybatisConfig.ServerEnum.sentiment);
+		queryCore = new QueryCore();
 	}
 
 	@Override
@@ -43,39 +39,11 @@ public class SentiSearchApplication extends Application {
 	}
 
 	public QueryResult queryData(QueryParams queryParams) {
-		return searchingData.queryData(queryParams, Boolean.TRUE);
-	}
-
-	/**
-	 * 插入查询缓存数据
-	 */
-	public void insertCacheQuery(String tablename, String query_id, String query_url, String query_result) {
-		sentimentRecord.insertCacheQuery(tablename, query_id, query_url, query_result);
-	}
-
-	/**
-	 * 更新查询缓存数据
-	 */
-	public void updateCacheQuery(String tablename, String query_id, String query_url, String query_result) {
-		sentimentRecord.updateCacheQuery(tablename, query_id, query_url, query_result);
-	}
-
-	/**
-	 * 查询查询缓存数据
-	 */
-	public String selectCacheQuery(String tablename, String query_id) {
-		return sentimentRecord.selectCacheQuery(tablename, query_id);
-	}
-
-	/**
-	 * 删除查询缓存数据
-	 */
-	public void deleteCacheQuery(String tablename, String query_id) {
-		sentimentRecord.deleteCacheQuery(tablename, query_id);
+		return queryCore.queryData(queryParams, Boolean.TRUE);
 	}
 
 	public void close() {
-		searchingData.close();
+		queryCore.close();
 	}
 
 }

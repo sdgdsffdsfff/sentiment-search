@@ -8,11 +8,6 @@
 		<property name="db_encoding" value="UTF8" />
 	</properties>
 	<typeAliases>
-		<!-- 新浪微博数据 -->
-		<typeAlias alias="WeiboOldInfo"
-			type="zx.soft.sent.dao.domain.weibo.WeiboOldInfo" />
-		<typeAlias alias="WeiboSinaParams"
-			type="zx.soft.sent.dao.domain.weibo.WeiboSinaParams" />
 		<!-- 舆情数据 -->
 		<typeAlias alias="SentTablename" type="zx.soft.sent.dao.domain.sentiment.SentTablename" />
 		<typeAlias alias="RecordInsert" type="zx.soft.sent.dao.domain.sentiment.RecordInsert" />
@@ -23,6 +18,9 @@
 		<typeAlias alias="SelectCacheQuery" type="zx.soft.sent.dao.domain.sentiment.SelectCacheQuery" />
 		<!-- OA专题数据缓存 -->
 		<typeAlias alias="SpecialTopic" type="zx.soft.sent.dao.domain.special.SpecialTopic"/>
+		<!-- OA全网搜索 -->
+		<typeAlias alias="InternetTask" type="zx.soft.sent.dao.domain.allinternet.InternetTask"/>
+		<typeAlias alias="TaskResult" type="zx.soft.sent.dao.domain.allinternet.TaskResult"/>
 	</typeAliases>
 	<environments default="sentiment">
 		<environment id="sentiment">
@@ -40,11 +38,11 @@
 		</environment>
 	</environments>
 	<mappers>
-		<mapper resource="WeiboSinaDaoMapper.xml" />
 		<mapper resource="SentimentRecordDaoMapper.xml"/>
 		<mapper resource="SpecialQueryMapper.xml"/>
 		<package name="zx.soft.sent.dao.spidersite"/>
 		<package name="zx.soft.sent.dao.firstpage"/>
+		<package name="zx.soft.sent.dao.allinternet" />
 	</mappers>
 </configuration>
 	

@@ -17,7 +17,7 @@ import zx.soft.utils.codec.URLCodecUtils;
 
 /**
  * 舆情搜索资源类
- * 
+ *
  * @author wanggang
  *
  */
@@ -26,8 +26,6 @@ public class SentSearchResource extends ServerResource {
 	private static Logger logger = LoggerFactory.getLogger(SentSearchResource.class);
 
 	private static SentiSearchApplication application;
-
-	//	private static ThreadPoolExecutor pool = ApplyThreadPool.getThreadPoolExector();
 
 	private QueryParams queryParams;
 
@@ -46,10 +44,12 @@ public class SentSearchResource extends ServerResource {
 			}
 		}
 		// 参数处理
-		queryParams.setQ(params.get("q") == null ? "*:*" : params.get("q").replaceAll(":", "")); // q中带有英文冒号无法传入solr
+		//		queryParams.setQ(params.get("q") == null ? "*:*" : params.get("q").replaceAll(":", ""));
+		// q中带有英文冒号无法传入solr，所以传入q参数不能单独含有冒号，冒号前面应当有字段域
+		queryParams.setQ(params.get("q") == null ? "*:*" : params.get("q"));
 		queryParams.setFq(params.get("fq") == null ? "" : params.get("fq"));
 		queryParams.setSort(params.get("sort") == null ? "" : params.get("sort"));
-		queryParams.setStart(params.get("start") == null ? 0 : (Integer.parseInt(params.get("start")) > 1000 ? 1000
+		queryParams.setStart(params.get("start") == null ? 0 : (Integer.parseInt(params.get("start")) > 100000 ? 100000
 				: Integer.parseInt(params.get("start"))));
 		queryParams.setRows(params.get("rows") == null ? 10 : (Integer.parseInt(params.get("rows")) > 100 ? 100
 				: Integer.parseInt(params.get("rows"))));
@@ -67,29 +67,7 @@ public class SentSearchResource extends ServerResource {
 		if (getReference().getRemainingPart() == null) {
 			return new ErrorResponse.Builder(20003, "your query params is illegal.").build();
 		}
-		// 数据库存在的话，返回该条数据，并且另一个线程更新数据
-		//		String cacheResult = application.selectCacheQuery(CreateTables.CACHE_QUERY_TABLE,
-		//				CheckSumUtils.getMD5(queryURL));
-		//		if (cacheResult != null) {
-		//			pool.execute(new Runnable() {
-		//				@Override
-		//				public void run() {
-		//					final QueryResult result = application.queryData(queryParams);
-		//					application.updateCacheQuery(CreateTables.CACHE_QUERY_TABLE, CheckSumUtils.getMD5(queryURL),
-		//							queryURL, JsonUtils.toJsonWithoutPretty(result));
-		//				}
-		//			});
-		//			return cacheResult;
-		//		}
-		// 数据库不存在的话，查询结果返回，并且另一个线程写数据
 		final QueryResult queryResult = application.queryData(queryParams);
-		//		pool.execute(new Runnable() {
-		//			@Override
-		//			public void run() {
-		//				application.insertCacheQuery(CreateTables.CACHE_QUERY_TABLE, CheckSumUtils.getMD5(queryURL), queryURL,
-		//						JsonUtils.toJsonWithoutPretty(queryResult));
-		//			}
-		//		});
 		return queryResult;
 	}
 

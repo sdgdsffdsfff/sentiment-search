@@ -9,9 +9,10 @@ import org.slf4j.LoggerFactory;
 import zx.soft.sent.dao.domain.platform.RecordInfo;
 import zx.soft.sent.solr.utils.RedisCacheExpired;
 import zx.soft.sent.solr.utils.RedisMQ;
+import zx.soft.utils.log.LogbackUtil;
 
 /**
- * 将Redis消息队列中的数据所引到SolrCloud：hefei08运行
+ * 将Redis消息队列中的数据所引到SolrCloud：hefei09,hefei10运行
  *
  * 运行目录：/home/zxdfs/run-work/index
  * 运行命令： cd sentiment-solr
@@ -27,14 +28,16 @@ public class ImportRedisToSC {
 	private final IndexCloudSolr indexCloudSolr;
 
 	private final RedisMQ redisCache;
+	//	private final JedisClient redisCache;
 
 	private final RedisCacheExpired redisCacheExpired;
 
 	public ImportRedisToSC() {
-		// 三天有效期
-		redisCacheExpired = new RedisCacheExpired(3 * 86400);
+		// 7天有效期
+		redisCacheExpired = new RedisCacheExpired(7 * 86400);
 		indexCloudSolr = new IndexCloudSolr();
 		redisCache = new RedisMQ();
+		//		redisCache = new JedisClient();
 	}
 
 	/**
@@ -68,27 +71,33 @@ public class ImportRedisToSC {
 							if (tmp.getFirst_time() != 0) {
 								redisCacheExpired.addRecord(tmp.getId(), tmp.getFirst_time() + "");
 							} else {
-								logger.info("id:{} firsttime is null.", tmp.getFirst_time());
+								logger.info("id:{} firsttime is null.", tmp.getId());
 							}
 						}
 					}
 					result.add(tmp);
 				}
-				indexCloudSolr.addDocsToSolr(result);
+				try {
+					indexCloudSolr.addDocsToSolr(result);
+				} catch (final Exception e) {
+					logger.error("Exception:{}", LogbackUtil.expection2Str(e));
+					// 索引提交失败，还需要将元数据写回Redis
+					redisCache.addRecord(records.toArray(new String[0]));
+				}
+			} else {
+				try {
+					Thread.sleep(1_000);
+				} catch (InterruptedException e) {
+					// TODO
+				}
 			}
 			logger.info("Finishing index ...");
-			// 休息2秒
-			//			try {
-			//				Thread.sleep(2000);
-			//			} catch (InterruptedException e) {
-			//				logger.error("Exception:{}", LogbackUtil.expection2Str(e));
-			//			}
 		}
 	}
 
 	public void close() {
 		indexCloudSolr.close();
-		redisCache.close();
+		//		redisCache.close();
 	}
 
 }

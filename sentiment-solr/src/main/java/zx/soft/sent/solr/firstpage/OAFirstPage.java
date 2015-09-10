@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 import zx.soft.sent.solr.domain.QueryParams;
 import zx.soft.sent.solr.domain.QueryResult;
 import zx.soft.sent.solr.domain.SimpleFacetInfo;
-import zx.soft.sent.solr.search.SearchingData;
+import zx.soft.sent.solr.query.QueryCore;
 import zx.soft.utils.json.JsonUtils;
 import zx.soft.utils.time.TimeUtils;
 
@@ -27,9 +27,9 @@ public class OAFirstPage {
 
 	private static Logger logger = LoggerFactory.getLogger(OAFirstPage.class);
 
-	private final SearchingData search;
+	private final QueryCore queryCore;
 
-	private static String[] negatives = { //
+	public static final String[] NEGATIVES = { //
 	"造谣窒息事故暴行毁容致死诬陷猥亵砍人诈骗案反动被害逃逸违法罪犯刺死爆炸物施暴开枪迷幻药毒手炸通缉令砍伤毒打砍杀辱骂偷窃窒息而死违法行为",
 			"灭口杀灭非法滋事下毒手交警刑事案件贪污腐败恐怖行动伸冤害人强奸淫秽强暴炸药事件起火毒死跳楼尸体恶毒暴打变态新疆人毒害受害人草菅人命威吓",
 			"通缉侵占霸占打架斗殴砸死报案恶名拆迁房死了假释暴力冤枉灾区嫌疑人暴动腐败分子禁毒仇恨死亡淫笑恐怖主义撞死死人侵害犯罪猥亵作乱审判打劫得罪",
@@ -41,8 +41,10 @@ public class OAFirstPage {
 			"涉嫌色情持刀抓获归案同案赃款被害人击毙击伤搜查围捕血案圣战爆炸声爆炸枪走私涉枪涉赌绑架寻衅枪支子弹枪弹举报线索上当骗走被骗谎称受骗骗取被打", //
 			"因涉嫌故意伤害案发后" };
 
+	public static String LOCATION_ANHUI = "安徽";
+
 	public OAFirstPage() {
-		this.search = new SearchingData();
+		this.queryCore = new QueryCore();
 	}
 
 	/**
@@ -62,6 +64,9 @@ public class OAFirstPage {
 		//		System.out.println(JsonUtils.toJson(todayWeibosSum));
 		//		List<SolrDocument> todayWeibos = firstPage.getTodayNegativeRecords(7, 50, "合肥");
 		//		System.out.println(JsonUtils.toJson(todayWeibos));
+		//		List<SolrDocument> negative = firstPage.getNegativeRecords(2, 0, 10);
+		//		List<SolrDocument> negative = firstPage.getNegativeRecords(3, 0, 10);
+		//		System.out.println(JsonUtils.toJson(negative));
 		firstPage.close();
 
 	}
@@ -75,7 +80,7 @@ public class OAFirstPage {
 		QueryParams queryParams = new QueryParams();
 		queryParams.setRows(0);
 		queryParams.setFacetField("platform");
-		QueryResult queryResult = search.queryData(queryParams, false);
+		QueryResult queryResult = queryCore.queryData(queryParams, false);
 		for (SimpleFacetInfo facetField : queryResult.getFacetFields()) {
 			if ("platform".equalsIgnoreCase(facetField.getName())) {
 				result = facetField.getValues();
@@ -101,9 +106,11 @@ public class OAFirstPage {
 		queryParams.setRows(0);
 		queryParams.setFacetField("platform");
 		// lasttime代表入solr时间，update_time更新时间
+		logger.info("lasttime:[" + TimeUtils.transToSolrDateStr(startTime) + " TO "
+				+ TimeUtils.transToSolrDateStr(currentTime) + "]");
 		queryParams.setFq("lasttime:[" + TimeUtils.transToSolrDateStr(startTime) + " TO "
 				+ TimeUtils.transToSolrDateStr(currentTime) + "]");
-		QueryResult queryResult = search.queryData(queryParams, false);
+		QueryResult queryResult = queryCore.queryData(queryParams, false);
 		for (SimpleFacetInfo facetField : queryResult.getFacetFields()) {
 			if ("platform".equalsIgnoreCase(facetField.getName())) {
 				result = facetField.getValues();
@@ -122,7 +129,7 @@ public class OAFirstPage {
 		queryParams.setRows(N);
 		queryParams.setFq("username:" + username);
 		queryParams.setSort("timestamp:desc");
-		QueryResult queryResult = search.queryData(queryParams, false);
+		QueryResult queryResult = queryCore.queryData(queryParams, false);
 		result = queryResult.getResults();
 		return result;
 	}
@@ -131,18 +138,26 @@ public class OAFirstPage {
 	 * 根据当天的微博数据，分别统计0、3、6、9、12、15、18、21时刻的四大微博数据进入总量；
 	 * 即从0点开始，每隔3个小时统计以下。
 	 */
+	@SuppressWarnings("deprecation")
 	public HashMap<String, Long> getTodayWeibosSum(int day, int hour) {
 		logger.info("Getting today weibos' sum ...");
 		HashMap<String, Long> result = initWeibosResult();
 		long currentTime = System.currentTimeMillis() - day * 86400_000L;
-		long startTime = currentTime - currentTime % 86400_000L - 8 * 3600_000L + hour * 3600_000 - 3 * 3600_000;//该天的第hour时刻
-		long endTime = startTime + 3 * 3600_000; // 该天的第hour+3时刻，时间间隔为三小时
+		long startTime = currentTime - currentTime % 86400_000L - 8 * 3600_000L;
+		if (new Date(currentTime).getHours() < 8) {
+			startTime += 1 * 86400_000L;
+		}
+		long endTime = startTime + hour * 3600_000; // 该天的第hour时刻，时间间隔为三小时
+		startTime = endTime - 3 * 3600_000; // 该天的第hour-3时刻
+
 		QueryParams queryParams = new QueryParams();
 		queryParams.setRows(0);
 		queryParams.setFacetField("source_name");
+		logger.info("lasttime:[" + TimeUtils.transToSolrDateStr(startTime) + " TO "
+				+ TimeUtils.transToSolrDateStr(endTime) + "];platform:3");
 		queryParams.setFq("lasttime:[" + TimeUtils.transToSolrDateStr(startTime) + " TO "
 				+ TimeUtils.transToSolrDateStr(endTime) + "];platform:3");
-		QueryResult queryResult = search.queryData(queryParams, false);
+		QueryResult queryResult = queryCore.queryData(queryParams, false);
 		for (SimpleFacetInfo facetField : queryResult.getFacetFields()) {
 			if ("source_name".equalsIgnoreCase(facetField.getName())) {
 				for (Entry<String, Long> t : facetField.getValues().entrySet()) {
@@ -161,12 +176,15 @@ public class OAFirstPage {
 	 * @param platform:论坛-2,微博-3
 	 * @param day
 	 * @return
+	 *
+	 * TODO : 需要改进，将循环改成多线程
 	 */
+	@Deprecated
 	public List<SolrDocument> getNegativeRecords(int platform, int day, int N) {
 		logger.info("Getting today negative records ...");
 		List<SolrDocument> result = new ArrayList<>();
 		List<SolrDocument> temp = null;
-		for (String negative : negatives) {
+		for (String negative : NEGATIVES) {
 			temp = getNegativeShard(platform, day, N, negative);
 			if (temp != null) {
 				for (SolrDocument t : temp) {
@@ -179,11 +197,14 @@ public class OAFirstPage {
 
 	/**
 	 * 根据关键词查询当天的有害信息
+	 *
+	 * TODO : 需要改进，将循环改成多线程
 	 */
+	@Deprecated
 	public List<SolrDocument> getTodayNegativeRecords(int interval, int N, String q) {
 		List<SolrDocument> result = new ArrayList<>();
 		List<SolrDocument> temp = null;
-		for (String negative : negatives) {
+		for (String negative : NEGATIVES) {
 			temp = getNegativeShard(interval, N, negative + " AND " + q);
 			if (temp != null) {
 				for (SolrDocument t : temp) {
@@ -204,7 +225,7 @@ public class OAFirstPage {
 		queryParams.setFq("timestamp:[" + TimeUtils.transToSolrDateStr(startTime) + " TO "
 				+ TimeUtils.transToSolrDateStr(currentTime) + "]");
 		//		queryParams.setSort("timestamp:desc");
-		QueryResult queryResult = search.queryData(queryParams, false);
+		QueryResult queryResult = queryCore.queryData(queryParams, false);
 		return queryResult.getResults();
 	}
 
@@ -216,8 +237,8 @@ public class OAFirstPage {
 		queryParams.setQop("OR");
 		queryParams.setRows(N);
 		queryParams.setFq("timestamp:[" + TimeUtils.transToSolrDateStr(startTime) + " TO "
-				+ TimeUtils.transToSolrDateStr(currentTime) + "];platform:" + platform);
-		QueryResult queryResult = search.queryData(queryParams, false);
+				+ TimeUtils.transToSolrDateStr(currentTime) + "];platform:" + platform + ";content:" + LOCATION_ANHUI);
+		QueryResult queryResult = queryCore.queryData(queryParams, false);
 		return queryResult.getResults();
 	}
 
@@ -233,8 +254,40 @@ public class OAFirstPage {
 		return result;
 	}
 
+	/**
+	 * TODO : 需要改进，将循环改成多线程
+	 */
+	@Deprecated
+	public List<SolrDocument> getHarmfulRecords(String platform, int day, int N) {
+		logger.info("Getting today negative records ...");
+		List<SolrDocument> result = new ArrayList<>();
+		List<SolrDocument> temp = null;
+		for (String negative : NEGATIVES) {
+			temp = getHarmfulShard(platform, day, N, negative);
+			if (temp != null) {
+				for (SolrDocument t : temp) {
+					result.add(t);
+				}
+			}
+		}
+		return result;
+	}
+
+	private List<SolrDocument> getHarmfulShard(String platform, int day, int N, String q) {
+		long currentTime = System.currentTimeMillis() - day * 86400_000L;
+		long startTime = currentTime - currentTime % 86400_000L - 8 * 3600_000L;
+		QueryParams queryParams = new QueryParams();
+		queryParams.setQ(q);
+		queryParams.setQop("OR");
+		queryParams.setRows(N);
+		queryParams.setFq("timestamp:[" + TimeUtils.transToSolrDateStr(startTime) + " TO "
+				+ TimeUtils.transToSolrDateStr(currentTime) + "];platform:" + platform + ";content:" + LOCATION_ANHUI);
+		QueryResult queryResult = queryCore.queryData(queryParams, false);
+		return queryResult.getResults();
+	}
+
 	public void close() {
-		search.close();
+		queryCore.close();
 	}
 
 }

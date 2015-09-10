@@ -34,6 +34,10 @@
 			<artifactId>negative-sentiment</artifactId>
 			<version>2.0.0</version>
 		</dependency>
+		<dependency>
+			<groupId>redis.clients</groupId>
+			<artifactId>jedis</artifactId>
+		</dependency>
 		<!-- 日志包 -->
 		<dependency>
 			<groupId>org.slf4j</groupId>
@@ -45,6 +49,11 @@
 			<artifactId>jsoup</artifactId>
 		</dependency>
 		<!-- JSON包 -->
+		<dependency>
+			<groupId>org.codehaus.jackson</groupId>
+			<artifactId>jackson-mapper-asl</artifactId>
+			<version>1.9.13</version><!--$NO-MVN-MAN-VER$ -->
+		</dependency>
 		<dependency>
 			<groupId>org.codehaus.jackson</groupId>
 			<artifactId>jackson-core-asl</artifactId>
@@ -77,6 +86,7 @@
 					<excludes>
 						<exclude>logback.xml</exclude>
 						<exclude>data_db.properties</exclude>
+						<exclude>oracle_db.properties</exclude>
 						<exclude>solr_params.properties</exclude>
 						<exclude>cache-config.properties</exclude>
 					</excludes>
@@ -99,12 +109,6 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- <plugin> <artifactId>maven-assembly-plugin</artifactId> <configuration> 
-				<archive> <manifest> <mainClass>zx.soft.sent.solr.driver.SentSolrDriver</mainClass> 
-				</manifest> </archive> <descriptorRefs> <descriptorRef>jar-with-dependencies</descriptorRef> 
-				</descriptorRefs> </configuration> <executions> <execution> <id>make-assembly</id> 
-				<phase>package</phase> <goals> <goal>single</goal> </goals> </execution> 
-				</executions> </plugin> -->
 		</plugins>
 
 		<finalName>${project.artifactId}-${project.version}</finalName>
